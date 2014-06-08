@@ -11,6 +11,8 @@ import android.view.View;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import org.x2ools.xappsearchlib.AppsGridView.HideViewCallback;
+
 public class T9AppsView extends RelativeLayout {
 
     public static final boolean DEBUG = true;
@@ -51,8 +53,9 @@ public class T9AppsView extends RelativeLayout {
                 if (started) {
                     hideView();
                 }
-            } else if (id == R.id.buttonBack) {
-                hideView();
+            } else if (id == R.id.buttonStar) {
+                //hideView();
+                //TODO force stop all apps
             } else if (id == R.id.buttonDelete) {
                 clearFilter();
             }
@@ -74,8 +77,11 @@ public class T9AppsView extends RelativeLayout {
                 int number = getNumberById(view.getId());
                 mFilterText.append(number);
                 onTextChanged();
-            } else if (id == R.id.buttonBack) {
-                hideView();
+            } else if (id == R.id.buttonStar) {
+                // show all apps, like a launcher
+                mFilterText.delete(0, mFilterText.length());
+                mFilterView.setText(mFilterText);
+                mAppsGridView.setAllApplicationsData();
             } else if (id == R.id.buttonDelete) {
                 if (TextUtils.isEmpty(mFilterText))
                     return;
@@ -131,7 +137,7 @@ public class T9AppsView extends RelativeLayout {
 
                 R.id.button7, R.id.button8, R.id.button9,
 
-                R.id.buttonBack, R.id.button0, R.id.buttonDelete
+                R.id.buttonStar, R.id.button0, R.id.buttonDelete
         };
 
         for (int id : buttons) {
@@ -143,6 +149,15 @@ public class T9AppsView extends RelativeLayout {
         setOnClickListener(mOnClickListener);
         mAppsGridView = (AppsGridView) findViewById(R.id.appsList);
         mFilterView = (TextView) findViewById(R.id.numFilter);
+        
+        HideViewCallback callback = new HideViewCallback() {
+            
+            @Override
+            public void hideView() {
+                T9AppsView.this.hideView();
+            }
+        };
+        mAppsGridView.setCallback(callback);
 
         super.onFinishInflate();
     }
@@ -157,7 +172,7 @@ public class T9AppsView extends RelativeLayout {
         return super.dispatchKeyEvent(event);
     }
 
-    private void hideView() {
+    public void hideView() {
         ((Activity) mContext).finish();
     }
 

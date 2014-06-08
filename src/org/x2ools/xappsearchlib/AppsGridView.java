@@ -1,7 +1,6 @@
 
 package org.x2ools.xappsearchlib;
 
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RecentTaskInfo;
 import android.content.ActivityNotFoundException;
@@ -44,6 +43,7 @@ public class AppsGridView extends GridView {
     private static T9Search sT9Search;
 
     private ArrayList<ApplicationItem> apps;
+    private ArrayList<ApplicationItem> allApps;
 
     private PackageManager mPackageManager;
 
@@ -52,6 +52,8 @@ public class AppsGridView extends GridView {
     private LayoutInflater mLayoutInflater;
 
     private String mFilterStr = null;
+
+    private HideViewCallback mCallback;
 
     private Handler mHandler = new Handler() {
 
@@ -100,6 +102,15 @@ public class AppsGridView extends GridView {
         setAdapter(mAppsAdapter);
         mAppsAdapter.notifyDataSetChanged();
     }
+    
+    public void setAllApplicationsData() {
+        if (allApps == null) {
+            allApps = getAllApps();
+        }
+        mAppsAdapter = new AppsAdapter(allApps);
+        setAdapter(mAppsAdapter);
+        mAppsAdapter.notifyDataSetChanged();
+    }
 
     public boolean startAcivityByIndex(int index) {
         if (DEBUG) {
@@ -135,7 +146,7 @@ public class AppsGridView extends GridView {
         }
         T9SearchResult result = sT9Search.search(string);
         if (result != null) {
-            apps = sT9Search.search(string).getResults();
+            apps = result.getResults();
             mAppsAdapter = new AppsAdapter(apps);
             setAdapter(mAppsAdapter);
             mAppsAdapter.notifyDataSetChanged();
@@ -183,12 +194,35 @@ public class AppsGridView extends GridView {
                         recents.add(item);
                     }
                 } catch (NameNotFoundException e) {
-                    Log.e(TAG, "cannot find package", e);
+                    // Log.e(TAG, "cannot find package", e);
                 }
             }
         }
 
         return recents;
+    }
+
+    public ArrayList<ApplicationItem> getAllApps() {
+        List<ApplicationInfo> infos = mPackageManager.getInstalledApplications(0);
+        ArrayList<ApplicationItem> items = new ArrayList<ApplicationItem>();
+        for (ApplicationInfo info : infos) {
+            if (mPackageManager.getLaunchIntentForPackage(info.packageName) == null)
+                continue;
+            boolean added = false;
+            for (ApplicationItem tmp : items) {
+                if (tmp.packageName.equals(info.packageName))
+                    added = true;
+            }
+            if (!added) {
+                ApplicationItem item = new ApplicationItem();
+                item.name = info.loadLabel(mPackageManager).toString();
+                item.packageName = info.packageName;
+                item.drawable = info.loadIcon(mPackageManager);
+                items.add(item);
+            }
+        }
+
+        return items;
     }
 
     private boolean isTaskInRecentList(ApplicationItem item) {
@@ -286,8 +320,7 @@ public class AppsGridView extends GridView {
                         mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
                                 item.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                     }
-
-                    ((Activity) mContext).finish();
+                    mCallback.hideView();
 
                 }
 
@@ -303,7 +336,7 @@ public class AppsGridView extends GridView {
                     i.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
                     i.setData(Uri.parse("package:" + item.packageName));
                     mContext.startActivity(i);
-                    ((Activity) mContext).finish();
+                    mCallback.hideView();
                     return true;
                 }
 
@@ -312,6 +345,14 @@ public class AppsGridView extends GridView {
             viewHolder.icon.setImageDrawable(item.drawable);
             return convertView;
         }
+    }
+
+    public interface HideViewCallback {
+        public void hideView();
+    }
+
+    public void setCallback(HideViewCallback callback) {
+        mCallback = callback;
     }
 
     static class ViewHolder {

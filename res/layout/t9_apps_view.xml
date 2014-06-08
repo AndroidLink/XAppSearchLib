@@ -111,7 +111,7 @@
                     android:layout_weight="1" >
 
                     <ImageButton
-                        android:id="@+id/buttonBack"
+                        android:id="@+id/buttonStar"
                         style="@style/DialtactsDialpadButtonStyle"
                         android:src="@drawable/dial_num_star" />
 
@@ -128,5 +128,4 @@
             </TableLayout>
         </RelativeLayout>
     </FrameLayout>
-
 </org.x2ools.xappsearchlib.T9AppsView>
