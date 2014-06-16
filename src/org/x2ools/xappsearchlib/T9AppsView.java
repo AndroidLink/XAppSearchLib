@@ -142,8 +142,6 @@ public class T9AppsView extends RelativeLayout {
 
         for (int id : buttons) {
             findViewById(id).setOnClickListener(mOnClickListener);
-        }
-        for (int id : buttons) {
             findViewById(id).setOnLongClickListener(mOnLongClickListener);
         }
         setOnClickListener(mOnClickListener);

@@ -150,6 +150,9 @@ public class AppsGridView extends GridView {
             mAppsAdapter = new AppsAdapter(apps);
             setAdapter(mAppsAdapter);
             mAppsAdapter.notifyDataSetChanged();
+        } else {
+            setAdapter(null);
+            mAppsAdapter.notifyDataSetChanged();
         }
     }
 
