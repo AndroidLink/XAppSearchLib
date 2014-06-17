@@ -40,7 +40,7 @@ public class AppsGridView extends GridView {
 
     private Context mContext;
 
-    private static T9Search sT9Search;
+    public static T9Search sT9Search;
 
     private ArrayList<ApplicationItem> apps;
     private ArrayList<ApplicationItem> allApps;
