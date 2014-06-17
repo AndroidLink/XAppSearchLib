@@ -60,7 +60,10 @@ public class T9Search {
         getAll();
     }
 
-    private void getAll() {
+    public ArrayList<ApplicationItem> getAll() {
+        if (mApps.size() > 0)
+            return mApps;
+
         if (sT9Map == null)
             initT9Map();
 
@@ -78,6 +81,8 @@ public class T9Search {
             appitem.drawable = appinfo.loadIcon(mPackageManager);
             mApps.add(appitem);
         }
+
+        return mApps;
     }
 
     public static class T9SearchResult {

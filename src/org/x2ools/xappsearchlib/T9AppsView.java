@@ -18,6 +18,8 @@ public class T9AppsView extends RelativeLayout {
     public static final boolean DEBUG = true;
 
     private static final String TAG = "T9AppsView";
+    
+    private boolean allMode = false;
 
     public T9AppsView(Context context) {
         super(context);
@@ -78,10 +80,16 @@ public class T9AppsView extends RelativeLayout {
                 mFilterText.append(number);
                 onTextChanged();
             } else if (id == R.id.buttonStar) {
-                // show all apps, like a launcher
                 mFilterText.delete(0, mFilterText.length());
                 mFilterView.setText(mFilterText);
-                mAppsGridView.setAllApplicationsData();
+                if(allMode) {
+                    allMode = false;
+                    mAppsGridView.setApplicationsData();
+                } else {
+                    allMode = true;
+                    // show all apps, like a launcher
+                    mAppsGridView.setAllApplicationsData();
+                }
             } else if (id == R.id.buttonDelete) {
                 if (TextUtils.isEmpty(mFilterText))
                     return;

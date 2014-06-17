@@ -45,7 +45,6 @@ public class AppsGridView extends GridView {
     private static T9Search sT9Search;
 
     private ArrayList<ApplicationItem> apps;
-    private ArrayList<ApplicationItem> allApps;
 
     private PackageManager mPackageManager;
 
@@ -122,9 +121,7 @@ public class AppsGridView extends GridView {
     }
 
     public void setAllApplicationsData() {
-        if (allApps == null) {
-            allApps = getAllApps();
-        }
+        ArrayList<ApplicationItem> allApps = sT9Search.getAll();
         mAppsAdapter = new AppsAdapter(allApps);
         setAdapter(mAppsAdapter);
         mAppsAdapter.notifyDataSetChanged();
@@ -221,29 +218,6 @@ public class AppsGridView extends GridView {
         }
 
         return recents;
-    }
-
-    public ArrayList<ApplicationItem> getAllApps() {
-        List<ApplicationInfo> infos = mPackageManager.getInstalledApplications(0);
-        ArrayList<ApplicationItem> items = new ArrayList<ApplicationItem>();
-        for (ApplicationInfo info : infos) {
-            if (mPackageManager.getLaunchIntentForPackage(info.packageName) == null)
-                continue;
-            boolean added = false;
-            for (ApplicationItem tmp : items) {
-                if (tmp.packageName.equals(info.packageName))
-                    added = true;
-            }
-            if (!added) {
-                ApplicationItem item = new ApplicationItem();
-                item.name = info.loadLabel(mPackageManager).toString();
-                item.packageName = info.packageName;
-                item.drawable = info.loadIcon(mPackageManager);
-                items.add(item);
-            }
-        }
-
-        return items;
     }
 
     private boolean isTaskInRecentList(ApplicationItem item) {
