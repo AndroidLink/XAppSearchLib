@@ -4,8 +4,10 @@ package org.x2ools.xappsearchlib;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RecentTaskInfo;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -40,7 +42,7 @@ public class AppsGridView extends GridView {
 
     private Context mContext;
 
-    public static T9Search sT9Search;
+    private static T9Search sT9Search;
 
     private ArrayList<ApplicationItem> apps;
     private ArrayList<ApplicationItem> allApps;
@@ -72,6 +74,23 @@ public class AppsGridView extends GridView {
         }
     };
 
+    private BroadcastReceiver mReceiver = new BroadcastReceiver() {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            new InitT9Thread().start();
+        }
+    };
+
+    private class InitT9Thread extends Thread {
+
+        @Override
+        public void run() {
+            sT9Search = new T9Search(mContext);
+            mHandler.sendEmptyMessage(MSG_SEARCH_INITED);
+        }
+    }
+
     public AppsGridView(Context context, AttributeSet attrs) {
         super(context, attrs);
         mContext = context;
@@ -80,14 +99,13 @@ public class AppsGridView extends GridView {
         mLayoutInflater = LayoutInflater.from(context);
         // sT9Search = new T9Search(context);
         setApplicationsData();
-        new Thread(new Runnable() {
+        new InitT9Thread().start();
 
-            @Override
-            public void run() {
-                sT9Search = new T9Search(mContext);
-                mHandler.sendEmptyMessage(MSG_SEARCH_INITED);
-            }
-        }).start();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("android.intent.action.PACKAGE_ADDED");
+        filter.addAction("android.intent.action.PACKAGE_REMOVED");
+        filter.addDataScheme("package");
+        context.registerReceiver(mReceiver, filter);
     }
 
     @Override
@@ -102,7 +120,7 @@ public class AppsGridView extends GridView {
         setAdapter(mAppsAdapter);
         mAppsAdapter.notifyDataSetChanged();
     }
-    
+
     public void setAllApplicationsData() {
         if (allApps == null) {
             allApps = getAllApps();
