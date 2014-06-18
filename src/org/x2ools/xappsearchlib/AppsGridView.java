@@ -127,6 +127,12 @@ public class AppsGridView extends GridView {
         mAppsAdapter.notifyDataSetChanged();
     }
 
+    public boolean isAllMode() {
+        if (getAdapter() == null)
+            return false;
+        return getAdapter().getCount() == sT9Search.getAll().size();
+    }
+
     public boolean startAcivityByIndex(int index) {
         if (DEBUG) {
             dumpApplications();

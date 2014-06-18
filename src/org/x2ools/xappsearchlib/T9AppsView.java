@@ -18,8 +18,6 @@ public class T9AppsView extends RelativeLayout {
     public static final boolean DEBUG = true;
 
     private static final String TAG = "T9AppsView";
-    
-    private boolean allMode = false;
 
     public T9AppsView(Context context) {
         super(context);
@@ -56,8 +54,8 @@ public class T9AppsView extends RelativeLayout {
                     hideView();
                 }
             } else if (id == R.id.buttonStar) {
-                //hideView();
-                //TODO force stop all apps
+                // hideView();
+                // TODO force stop all apps
             } else if (id == R.id.buttonDelete) {
                 clearFilter();
             }
@@ -82,12 +80,10 @@ public class T9AppsView extends RelativeLayout {
             } else if (id == R.id.buttonStar) {
                 mFilterText.delete(0, mFilterText.length());
                 mFilterView.setText(mFilterText);
-                if(allMode) {
-                    allMode = false;
+
+                if (mAppsGridView.isAllMode()) {
                     mAppsGridView.setApplicationsData();
                 } else {
-                    allMode = true;
-                    // show all apps, like a launcher
                     mAppsGridView.setAllApplicationsData();
                 }
             } else if (id == R.id.buttonDelete) {
@@ -155,9 +151,9 @@ public class T9AppsView extends RelativeLayout {
         setOnClickListener(mOnClickListener);
         mAppsGridView = (AppsGridView) findViewById(R.id.appsList);
         mFilterView = (TextView) findViewById(R.id.numFilter);
-        
+
         HideViewCallback callback = new HideViewCallback() {
-            
+
             @Override
             public void hideView() {
                 T9AppsView.this.hideView();
