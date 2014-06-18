@@ -8,6 +8,9 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.Animation.AnimationListener;
+import android.view.animation.TranslateAnimation;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -83,8 +86,10 @@ public class T9AppsView extends RelativeLayout {
 
                 if (mAppsGridView.isAllMode()) {
                     mAppsGridView.setApplicationsData();
+                    switchModeAnimate(false, true);
                 } else {
                     mAppsGridView.setAllApplicationsData();
+                    switchModeAnimate(true, true);
                 }
             } else if (id == R.id.buttonDelete) {
                 if (TextUtils.isEmpty(mFilterText))
@@ -95,6 +100,44 @@ public class T9AppsView extends RelativeLayout {
         }
 
     };
+
+    private void switchModeAnimate(final boolean allMode, boolean animate) {
+        final View buttonNumber = findViewById(R.id.buttonNumber);
+
+        if (animate) {
+            Animation anim;
+            if (allMode)
+                anim = new TranslateAnimation(0, 0, 0, buttonNumber.getHeight() * 4 / 3);
+            else {
+                anim = new TranslateAnimation(0, 0, buttonNumber.getHeight() * 4 / 3, 0);
+            }
+            anim.setDuration(500);
+            anim.setAnimationListener(new AnimationListener() {
+
+                @Override
+                public void onAnimationStart(Animation animation) {
+                    if (!allMode)
+                        buttonNumber.setVisibility(View.VISIBLE);
+                }
+
+                @Override
+                public void onAnimationRepeat(Animation animation) {
+                }
+
+                @Override
+                public void onAnimationEnd(Animation animation) {
+                    if (allMode)
+                        buttonNumber.setVisibility(View.GONE);
+                }
+            });
+            buttonNumber.startAnimation(anim);
+        } else {
+            if (allMode)
+                buttonNumber.setVisibility(View.GONE);
+            else
+                buttonNumber.setVisibility(View.VISIBLE);
+        }
+    }
 
     public void clearFilter() {
         mFilterText = new StringBuilder();
@@ -180,5 +223,6 @@ public class T9AppsView extends RelativeLayout {
 
     public void onMainViewShow() {
         mAppsGridView.setApplicationsData();
+        switchModeAnimate(false, false);
     }
 }
