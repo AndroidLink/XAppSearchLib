@@ -11,7 +11,6 @@ import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
@@ -30,9 +29,7 @@ import android.widget.TextView;
 import org.x2ools.xappsearchlib.model.SearchItem;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class AppsGridView extends GridView {
     private AppsAdapter mAppsAdapter;
@@ -46,8 +43,6 @@ public class AppsGridView extends GridView {
     private static T9Search sT9Search;
 
     private ArrayList<SearchItem> apps;
-
-    private static Map<String, Drawable> drawableCache;
 
     private PackageManager mPackageManager;
 
@@ -89,7 +84,6 @@ public class AppsGridView extends GridView {
     public AppsGridView(Context context, AttributeSet attrs) {
         super(context, attrs);
         mContext = context;
-        drawableCache = new HashMap<String, Drawable>();
         mPackageManager = context.getPackageManager();
         mActivityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         mLayoutInflater = LayoutInflater.from(context);
@@ -221,7 +215,8 @@ public class AppsGridView extends GridView {
                         SearchItem item = new SearchItem();
                         item.setName(info.loadLabel(mPackageManager).toString());
                         item.setPackageName(info.packageName);
-                        item.setIcon(info.icon);
+                        item.setPhoto("android.resource://" + info.packageName + "/drawable/"
+                                + info.icon);
                         item.setId(recentInfo.id);
                         item.setBaseIntent(recentInfo.baseIntent);
                         recents.add(item);
@@ -263,20 +258,20 @@ public class AppsGridView extends GridView {
 
     public class AppsAdapter extends BaseAdapter {
 
-        private List<SearchItem> mAppItems;
+        private List<SearchItem> mItems;
 
-        public AppsAdapter(List<SearchItem> apps) {
-            mAppItems = apps;
+        public AppsAdapter(List<SearchItem> items) {
+            mItems = items;
         }
 
         @Override
         public int getCount() {
-            return mAppItems.size();
+            return mItems.size();
         }
 
         @Override
         public Object getItem(int position) {
-            return mAppItems.get(position);
+            return mItems.get(position);
         }
 
         @Override
@@ -304,33 +299,42 @@ public class AppsGridView extends GridView {
 
                 @Override
                 public void onClick(View arg0) {
-                    if (item.getId() >= 0 && isTaskInRecentList(item)) {
-                        mActivityManager.moveTaskToFront(item.getId(),
-                                ActivityManager.MOVE_TASK_WITH_HOME);
-                        Log.v(TAG, "Move Task To Front for " + item.getId());
-                    } else if (item.getBaseIntent() != null) {
-                        Intent intent = item.getBaseIntent();
-                        intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
-                                | Intent.FLAG_ACTIVITY_TASK_ON_HOME | Intent.FLAG_ACTIVITY_NEW_TASK);
-                        Log.v(TAG, "Starting activity " + intent);
-                        try {
-                            mContext.startActivity(intent);
-                        } catch (SecurityException e) {
-                            Log.e(TAG, "Recents does not have the permission to launch " + intent,
-                                    e);
-                            mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
-                                    item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                        } catch (ActivityNotFoundException e) {
-                            Log.e(TAG, "Error launching activity " + intent, e);
+                    if (item.getType() == 1) {
+                        Intent intent=new Intent("android.intent.action.CALL",Uri.parse("tel:"+item.getPhoneNumber()));
+                        mContext.startActivity(intent);
+                    } else {
+                        if (item.getId() >= 0 && isTaskInRecentList(item)) {
+                            mActivityManager.moveTaskToFront(item.getId(),
+                                    ActivityManager.MOVE_TASK_WITH_HOME);
+                            Log.v(TAG, "Move Task To Front for " + item.getId());
+                        } else if (item.getBaseIntent() != null) {
+                            Intent intent = item.getBaseIntent();
+                            intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
+                                    | Intent.FLAG_ACTIVITY_TASK_ON_HOME
+                                    | Intent.FLAG_ACTIVITY_NEW_TASK);
+                            Log.v(TAG, "Starting activity " + intent);
+                            try {
+                                mContext.startActivity(intent);
+                            } catch (SecurityException e) {
+                                Log.e(TAG, "Recents does not have the permission to launch "
+                                        + intent,
+                                        e);
+                                mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
+                                        item.getPackageName()).addFlags(
+                                        Intent.FLAG_ACTIVITY_NEW_TASK));
+                            } catch (ActivityNotFoundException e) {
+                                Log.e(TAG, "Error launching activity " + intent, e);
+                                mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
+                                        item.getPackageName()).addFlags(
+                                        Intent.FLAG_ACTIVITY_NEW_TASK));
+                            }
+
+                        } else {
                             mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
                                     item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                         }
-
-                    } else {
-                        mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
-                                item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                        mCallback.hideView();
                     }
-                    mCallback.hideView();
 
                 }
 
@@ -341,61 +345,30 @@ public class AppsGridView extends GridView {
                 @Override
                 public boolean onLongClick(View arg0) {
                     Log.d(TAG, "onLongClick ");
-                    Intent i = new Intent();
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    i.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
-                    i.setData(Uri.parse("package:" + item.getPackageName()));
-                    mContext.startActivity(i);
-                    mCallback.hideView();
+                    if (item.getType() == 1) {
+                        // TODO go to detail contact
+                    } else {
+                        Intent i = new Intent();
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        i.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
+                        i.setData(Uri.parse("package:" + item.getPackageName()));
+                        mContext.startActivity(i);
+                        mCallback.hideView();
+                    }
+
                     return true;
                 }
 
             });
             viewHolder.textTitle.setText(item.getName());
-            setItemIcon(item, viewHolder.icon);
+            String photoUri = item.getPhoto();
+            if (!TextUtils.isEmpty(photoUri)) {
+                viewHolder.icon.setImageURI(Uri.parse(item.getPhoto()));
+            } else {
+                viewHolder.icon.setImageResource(R.drawable.ic_contact_unknow);
+            }
             return convertView;
         }
-    }
-
-    private void setItemIcon(SearchItem item, ImageView icon) {
-        Drawable drawable = drawableCache.get(item.getPackageName());
-        if (drawable != null) {
-            icon.setImageDrawable(drawable);
-        } else {
-            new IconLoadTask(item, icon).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-        }
-    }
-
-    private class IconLoadTask extends AsyncTask<Void, Void, Drawable> {
-
-        private ImageView icon;
-        private SearchItem item;
-
-        public IconLoadTask(SearchItem _item, ImageView _icon) {
-            icon = _icon;
-            item = _item;
-        }
-
-        @Override
-        protected Drawable doInBackground(Void... params) {
-            Context itemContext = null;
-            try {
-                itemContext = mContext.createPackageContext(item.getPackageName(),
-                        Context.CONTEXT_IGNORE_SECURITY);
-            } catch (NameNotFoundException e) {
-                e.printStackTrace();
-            }
-            Drawable d = itemContext.getResources().getDrawable(item.getIcon());
-            drawableCache.put(item.getPackageName(), d);
-            return d;
-        }
-
-        @Override
-        protected void onPostExecute(Drawable result) {
-            super.onPostExecute(result);
-            icon.setImageDrawable(result);
-        }
-
     }
 
     public interface HideViewCallback {

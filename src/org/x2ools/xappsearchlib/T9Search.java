@@ -1,6 +1,7 @@
 
 package org.x2ools.xappsearchlib;
 
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
@@ -9,6 +10,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.provider.ContactsContract;
 
 import org.x2ools.xappsearchlib.database.DBHelper;
 import org.x2ools.xappsearchlib.model.SearchItem;
@@ -29,6 +31,8 @@ public class T9Search {
 
     private PackageManager mPackageManager;
 
+    private ContentResolver mResolver;
+
     private DBHelper mDbHelper;
 
     private Handler mHandler;
@@ -39,6 +43,7 @@ public class T9Search {
         mContext = context;
         mHandler = handler;
         mPackageManager = context.getPackageManager();
+        mResolver = context.getContentResolver();
         mDbHelper = new DBHelper(mContext);
         new GetAllAyncTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
@@ -59,7 +64,7 @@ public class T9Search {
                 appitem.setPinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), false));
                 appitem.setFullpinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), true));
                 appitem.setPackageName(appinfo.packageName);
-                appitem.setIcon(appinfo.icon);
+                appitem.setPhoto("android.resource://" + appinfo.packageName + "/drawable/" + appinfo.icon);
 
                 Cursor c = db.query(DBHelper.TABLE, new String[] {
                         DBHelper.COLUME_PACKAGENAME
@@ -72,7 +77,8 @@ public class T9Search {
                 values.put(DBHelper.COLUME_NAME, appitem.getName());
                 values.put(DBHelper.COLUME_PINYIN, appitem.getPinyin());
                 values.put(DBHelper.COLUME_FULLPINYIN, appitem.getFullpinyin());
-                values.put(DBHelper.COLUME_ICON, appitem.getIcon());
+                values.put(DBHelper.COLUME_PHOTO, appitem.getPhoto());
+                values.put(DBHelper.COLUME_TYPE, 0);
 
                 if (c != null && c.moveToNext()) {
                     db.update(DBHelper.TABLE, values, "packagename = ?",
@@ -86,6 +92,56 @@ public class T9Search {
 
                 c.close();
             }
+
+            Cursor cursor = mResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    null,
+                    null, null, null);
+            while (cursor.moveToNext()) {
+                int id = cursor.getInt(cursor
+                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone._ID));
+                String name = cursor.getString(cursor
+                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
+                String phoneNumber = cursor.getString(cursor
+                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                String photoUri = cursor.getString(cursor
+                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_URI));
+
+                SearchItem item = new SearchItem();
+                item.setId(id);
+                item.setName(name);
+                item.setPinyin(ToPinYinUtils.getPinyinNum(item.getName(), false));
+                item.setFullpinyin(ToPinYinUtils.getPinyinNum(item.getName(), true));
+                item.setPhoneNumber(phoneNumber);
+                item.setPhoto(photoUri);
+
+                Cursor c = db.query(DBHelper.TABLE, new String[] {
+                        DBHelper.COLUME_PHONEID
+                }, "phoneid = ?",
+                        new String[] {
+                            item.getId() + ""
+                        }, null, null, null);
+
+                ContentValues values = new ContentValues();
+                values.put(DBHelper.COLUME_PHONEID, item.getId());
+                values.put(DBHelper.COLUME_NAME, item.getName());
+                values.put(DBHelper.COLUME_PINYIN, item.getPinyin());
+                values.put(DBHelper.COLUME_FULLPINYIN, item.getFullpinyin());
+                values.put(DBHelper.COLUME_PHONE, item.getPhoneNumber());
+                values.put(DBHelper.COLUME_PHOTO, item.getPhoto());
+                values.put(DBHelper.COLUME_TYPE, 1);
+
+                if (c != null && c.moveToNext()) {
+                    db.update(DBHelper.TABLE, values, "phoneid = ?",
+                            new String[] {
+                                item.getId() + ""
+                            });
+                } else {
+                    values.put(DBHelper.COLUME_PHONEID, item.getId());
+                    db.insert(DBHelper.TABLE, null, values);
+                }
+            }
+
+            cursor.close();
 
             db.close();
 
@@ -106,9 +162,9 @@ public class T9Search {
     public List<SearchItem> search(String number) {
 
         String selection = DBHelper.COLUME_PINYIN + " like ? OR " + DBHelper.COLUME_FULLPINYIN
-                + " like ?";
+                + " like ? OR " + DBHelper.COLUME_PHONE + " like ?";
         String[] args = new String[] {
-                "%" + number + "%", "%" + number + "%"
+                "%" + number + "%", "%" + number + "%", "%" + number + "%"
         };
         return query(selection, args);
     }
@@ -124,9 +180,11 @@ public class T9Search {
         if (c != null) {
             while (c.moveToNext()) {
                 SearchItem item = new SearchItem();
-                item.setIcon(c.getInt(c.getColumnIndex(DBHelper.COLUME_ICON)));
                 item.setName(c.getString(c.getColumnIndex(DBHelper.COLUME_NAME)));
                 item.setPackageName(c.getString(c.getColumnIndex(DBHelper.COLUME_PACKAGENAME)));
+                item.setType(c.getInt(c.getColumnIndex(DBHelper.COLUME_TYPE)));
+                item.setPhoneNumber(c.getString(c.getColumnIndex(DBHelper.COLUME_PHONE)));
+                item.setPhoto(c.getString(c.getColumnIndex(DBHelper.COLUME_PHOTO)));
                 results.add(item);
             }
         }

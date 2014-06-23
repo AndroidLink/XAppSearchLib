@@ -13,11 +13,11 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public static final String TABLE = "search";
     public static final String COLUME_NAME = "name";
+    public static final String COLUME_PHONEID = "phoneid";
     public static final String COLUME_TYPE = "type";
     public static final String COLUME_PINYIN = "pinyin";
     public static final String COLUME_FULLPINYIN = "fullpinyin";
     public static final String COLUME_PACKAGENAME = "packagename";
-    public static final String COLUME_ICON = "icon";
     public static final String COLUME_PHOTO = "photo";
     public static final String COLUME_PHONE = "phone";
 
@@ -34,11 +34,11 @@ public class DBHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE " + TABLE + "("
                 + "id integer primary key autoincrement,"
                 + COLUME_NAME + " varchar,"
+                + COLUME_PHONEID + " integer,"
                 + COLUME_TYPE + " integer,"
                 + COLUME_PINYIN + " varchar,"
                 + COLUME_FULLPINYIN + " varchar,"
                 + COLUME_PACKAGENAME + " varchar,"
-                + COLUME_ICON + " integer,"
                 + COLUME_PHOTO + " varchar,"
                 + COLUME_PHONE + " varchar)");
     }

@@ -30,10 +30,9 @@ public class SearchItem {
     // Application item only
     private String packageName;
     private Intent baseIntent;
-    private int icon;
 
     // contact item only
-    private Uri photo;
+    private String photo;
     private String phoneNumber; // search string 3
 
     public int getType() {
@@ -101,20 +100,13 @@ public class SearchItem {
         baseIntent.toUri(0);
     }
 
-    public int getIcon() {
-        return icon;
-    }
-
-    public void setIcon(int icon) {
-        this.icon = icon;
-    }
-
-    public Uri getPhoto() {
+    public String getPhoto() {
         return photo;
     }
 
-    public void setPhoto(Uri photo) {
+    public void setPhoto(String photo) {
         this.photo = photo;
     }
+
 
 }
