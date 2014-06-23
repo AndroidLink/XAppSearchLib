@@ -1,5 +1,5 @@
 
-package org.x2ools.xappsearchlib;
+package org.x2ools.xappsearchlib.tools;
 
 import android.annotation.SuppressLint;
 

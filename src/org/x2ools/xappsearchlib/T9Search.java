@@ -1,161 +1,137 @@
-/*
- * Copyright (C) 2011 The CyanogenMod Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 package org.x2ools.xappsearchlib;
 
+import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.os.AsyncTask;
+import android.os.Handler;
+
+import org.x2ools.xappsearchlib.database.DBHelper;
+import org.x2ools.xappsearchlib.model.SearchItem;
+import org.x2ools.xappsearchlib.tools.ToPinYinUtils;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
-/**
- * @author shade, Danesh, pawitp
- */
 public class T9Search {
 
-    // List sort modes
     private static final boolean DEBUG = false;
 
     private static final String TAG = "T9Search";
 
-    // Local variables
+    protected static final int MSG_DATA_LOADED = 0;
+
     private Context mContext;
-
-    private ArrayList<ApplicationItem> mNameResults = new ArrayList<ApplicationItem>();
-
-    private Set<ApplicationItem> mAllResults = new LinkedHashSet<ApplicationItem>();
-
-    private ArrayList<ApplicationItem> mApps = new ArrayList<ApplicationItem>();
-
-    private String mPrevInput;
 
     private PackageManager mPackageManager;
 
-    private List<ApplicationInfo> mApplications;
+    private DBHelper mDbHelper;
 
-    private static char[][] sT9Map;
+    private Handler mHandler;
 
-    public T9Search(Context context) {
+    private List<SearchItem> results = new ArrayList<SearchItem>();
+
+    public T9Search(Context context, Handler handler) {
         mContext = context;
+        mHandler = handler;
         mPackageManager = context.getPackageManager();
-        getAll();
+        mDbHelper = new DBHelper(mContext);
+        new GetAllAyncTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public ArrayList<ApplicationItem> getAll() {
-        if (mApps.size() > 0)
-            return mApps;
+    private class GetAllAyncTask extends AsyncTask<Void, Void, Void> {
 
-        if (sT9Map == null)
-            initT9Map();
+        @Override
+        protected Void doInBackground(Void... params) {
+            List<ApplicationInfo> mApplications = new ArrayList<ApplicationInfo>();
 
-        mApplications = new ArrayList<ApplicationInfo>();
+            mApplications.addAll(mPackageManager.getInstalledApplications(0));
+            SQLiteDatabase db = mDbHelper.getWritableDatabase();
+            for (ApplicationInfo appinfo : mApplications) {
+                if (mPackageManager.getLaunchIntentForPackage(appinfo.packageName) == null)
+                    continue;
+                SearchItem appitem = new SearchItem();
+                appitem.setName(appinfo.loadLabel(mPackageManager).toString());
+                appitem.setPinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), false));
+                appitem.setFullpinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), true));
+                appitem.setPackageName(appinfo.packageName);
+                appitem.setIcon(appinfo.icon);
 
-        mApplications.addAll(mPackageManager.getInstalledApplications(0));
-        for (ApplicationInfo appinfo : mApplications) {
-            if (mPackageManager.getLaunchIntentForPackage(appinfo.packageName) == null)
-                continue;
-            ApplicationItem appitem = new ApplicationItem();
-            appitem.name = appinfo.loadLabel(mPackageManager).toString();
-            appitem.pinyinNum = ToPinYinUtils.getPinyinNum(appitem.name, false);
-            appitem.fullpinyinNum = ToPinYinUtils.getPinyinNum(appitem.name, true);
-            appitem.packageName = appinfo.packageName;
-            appitem.drawable = appinfo.loadIcon(mPackageManager);
-            mApps.add(appitem);
-        }
+                Cursor c = db.query(DBHelper.TABLE, new String[] {
+                        DBHelper.COLUME_PACKAGENAME
+                }, "packagename = ?",
+                        new String[] {
+                            appitem.getPackageName()
+                        }, null, null, null);
 
-        return mApps;
-    }
+                ContentValues values = new ContentValues();
+                values.put(DBHelper.COLUME_NAME, appitem.getName());
+                values.put(DBHelper.COLUME_PINYIN, appitem.getPinyin());
+                values.put(DBHelper.COLUME_FULLPINYIN, appitem.getFullpinyin());
+                values.put(DBHelper.COLUME_ICON, appitem.getIcon());
 
-    public static class T9SearchResult {
+                if (c != null && c.moveToNext()) {
+                    db.update(DBHelper.TABLE, values, "packagename = ?",
+                            new String[] {
+                                appitem.getPackageName()
+                            });
+                } else {
+                    values.put(DBHelper.COLUME_PACKAGENAME, appitem.getPackageName());
+                    db.insert(DBHelper.TABLE, null, values);
+                }
 
-        private final ArrayList<ApplicationItem> mResults;
-
-        public T9SearchResult(final ArrayList<ApplicationItem> results, final Context mContext) {
-            mResults = results;
-        }
-
-        public int getNumResults() {
-            return mResults.size();
-        }
-
-        public ArrayList<ApplicationItem> getResults() {
-            return mResults;
-        }
-    }
-
-    public static class ApplicationItem {
-        public String name;
-
-        public String pinyinNum;
-
-        public String fullpinyinNum;
-
-        public String packageName;
-
-        public int taskId;
-
-        public Intent baseIntent;
-
-        public Drawable drawable;
-    }
-
-    public T9SearchResult search(String number) {
-        mNameResults.clear();
-        int pos = 0;
-        boolean newQuery = mPrevInput == null || number.length() <= mPrevInput.length();
-        // Go through each contact
-        for (ApplicationItem item : (newQuery ? mApps : mAllResults)) {
-            pos = item.pinyinNum.indexOf(number);
-            if (pos != -1) {
-                mNameResults.add(item);
+                c.close();
             }
 
-            pos = item.fullpinyinNum.indexOf(number);
-            if (pos != -1) {
-                mNameResults.add(item);
-            }
+            db.close();
+
+            return null;
         }
-        mAllResults.clear();
-        mPrevInput = number;
-        if (mNameResults.size() > 0) {
-            mAllResults.addAll(mNameResults);
-            return new T9SearchResult(new ArrayList<ApplicationItem>(mAllResults), mContext);
+
+        @Override
+        protected void onPostExecute(Void result) {
+            super.onPostExecute(result);
+            mHandler.sendEmptyMessage(MSG_DATA_LOADED);
         }
-        return null;
     }
 
-    private void initT9Map() {
-        String[] t9Array = mContext.getResources().getStringArray(R.array.t9_map);
-        sT9Map = new char[t9Array.length][];
-        int rc = 0;
-        for (String item : t9Array) {
-            int cc = 0;
-            sT9Map[rc] = new char[item.length()];
-            for (char ch : item.toCharArray()) {
-                sT9Map[rc][cc] = ch;
-                cc++;
+    public void reloadData() {
+        new GetAllAyncTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    public List<SearchItem> search(String number) {
+
+        String selection = DBHelper.COLUME_PINYIN + " like ? OR " + DBHelper.COLUME_FULLPINYIN
+                + " like ?";
+        String[] args = new String[] {
+                "%" + number + "%", "%" + number + "%"
+        };
+        return query(selection, args);
+    }
+
+    public List<SearchItem> getAll() {
+        return query(null, null);
+    }
+
+    private List<SearchItem> query(String selection, String[] selectionArgs) {
+        results.clear();
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        Cursor c = db.query(DBHelper.TABLE, null, selection, selectionArgs, null, null, null);
+        if (c != null) {
+            while (c.moveToNext()) {
+                SearchItem item = new SearchItem();
+                item.setIcon(c.getInt(c.getColumnIndex(DBHelper.COLUME_ICON)));
+                item.setName(c.getString(c.getColumnIndex(DBHelper.COLUME_NAME)));
+                item.setPackageName(c.getString(c.getColumnIndex(DBHelper.COLUME_PACKAGENAME)));
+                results.add(item);
             }
-            rc++;
         }
+
+        return results;
     }
 
 }

@@ -11,7 +11,9 @@ import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
@@ -25,11 +27,12 @@ import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import org.x2ools.xappsearchlib.T9Search.ApplicationItem;
-import org.x2ools.xappsearchlib.T9Search.T9SearchResult;
+import org.x2ools.xappsearchlib.model.SearchItem;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class AppsGridView extends GridView {
     private AppsAdapter mAppsAdapter;
@@ -38,13 +41,13 @@ public class AppsGridView extends GridView {
 
     private static final boolean DEBUG = false;
 
-    protected static final int MSG_SEARCH_INITED = 0;
-
     private Context mContext;
 
     private static T9Search sT9Search;
 
-    private ArrayList<ApplicationItem> apps;
+    private ArrayList<SearchItem> apps;
+
+    private static Map<String, Drawable> drawableCache;
 
     private PackageManager mPackageManager;
 
@@ -61,7 +64,7 @@ public class AppsGridView extends GridView {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case MSG_SEARCH_INITED:
+                case T9Search.MSG_DATA_LOADED:
                     if (!TextUtils.isEmpty(mFilterStr)) {
                         filter(mFilterStr);
                     }
@@ -77,31 +80,24 @@ public class AppsGridView extends GridView {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            new InitT9Thread().start();
+            if (sT9Search != null) {
+                sT9Search.reloadData();
+            }
         }
     };
-
-    private class InitT9Thread extends Thread {
-
-        @Override
-        public void run() {
-            sT9Search = new T9Search(mContext);
-            mHandler.sendEmptyMessage(MSG_SEARCH_INITED);
-        }
-    }
 
     public AppsGridView(Context context, AttributeSet attrs) {
         super(context, attrs);
         mContext = context;
+        drawableCache = new HashMap<String, Drawable>();
         mPackageManager = context.getPackageManager();
         mActivityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         mLayoutInflater = LayoutInflater.from(context);
-        // sT9Search = new T9Search(context);
+        sT9Search = new T9Search(context, mHandler);
         setApplicationsData();
-        new InitT9Thread().start();
-
         IntentFilter filter = new IntentFilter();
         filter.addAction("android.intent.action.PACKAGE_ADDED");
+        filter.addAction("android.intent.action.PACKAGE_CHANGED");
         filter.addAction("android.intent.action.PACKAGE_REMOVED");
         filter.addDataScheme("package");
         context.registerReceiver(mReceiver, filter);
@@ -121,7 +117,7 @@ public class AppsGridView extends GridView {
     }
 
     public void setAllApplicationsData() {
-        ArrayList<ApplicationItem> allApps = sT9Search.getAll();
+        List<SearchItem> allApps = sT9Search.getAll();
         mAppsAdapter = new AppsAdapter(allApps);
         setAdapter(mAppsAdapter);
         mAppsAdapter.notifyDataSetChanged();
@@ -138,19 +134,19 @@ public class AppsGridView extends GridView {
             dumpApplications();
         }
         if (index < apps.size()) {
-            ApplicationItem item = apps.get(index);
-            Intent i = mPackageManager.getLaunchIntentForPackage(item.packageName);
+            SearchItem item = apps.get(index);
+            Intent i = mPackageManager.getLaunchIntentForPackage(item.getPackageName());
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             mContext.startActivity(i);
-            Log.d(TAG, "start " + item.packageName);
+            Log.d(TAG, "start " + item.getPackageName());
             return true;
         }
         return false;
     }
 
     public void dumpApplications() {
-        for (ApplicationItem item : apps) {
-            Log.d(TAG, "info.packageName " + item.packageName);
+        for (SearchItem item : apps) {
+            Log.d(TAG, "info.packageName " + item.getPackageName());
         }
     }
 
@@ -165,10 +161,9 @@ public class AppsGridView extends GridView {
             mAppsAdapter.notifyDataSetChanged();
             return;
         }
-        T9SearchResult result = sT9Search.search(string);
+        List<SearchItem> result = sT9Search.search(string);
         if (result != null) {
-            apps = result.getResults();
-            mAppsAdapter = new AppsAdapter(apps);
+            mAppsAdapter = new AppsAdapter(result);
             setAdapter(mAppsAdapter);
             mAppsAdapter.notifyDataSetChanged();
         } else {
@@ -177,10 +172,10 @@ public class AppsGridView extends GridView {
         }
     }
 
-    public ArrayList<ApplicationItem> getRecentApps() {
+    public ArrayList<SearchItem> getRecentApps() {
         List<RecentTaskInfo> recentTasks = mActivityManager.getRecentTasks(9,
                 ActivityManager.RECENT_IGNORE_UNAVAILABLE | ActivityManager.RECENT_WITH_EXCLUDED);
-        ArrayList<ApplicationItem> recents = new ArrayList<ApplicationItem>();
+        ArrayList<SearchItem> recents = new ArrayList<SearchItem>();
         if (DEBUG) {
             Log.d(TAG, "recentTasks:  " + recentTasks);
         }
@@ -197,8 +192,8 @@ public class AppsGridView extends GridView {
                     if (mPackageManager.getLaunchIntentForPackage(info.packageName) == null)
                         continue;
                     boolean added = false;
-                    for (ApplicationItem tmp : recents) {
-                        if (tmp.packageName.equals(info.packageName))
+                    for (SearchItem tmp : recents) {
+                        if (tmp.getPackageName().equals(info.packageName))
                             added = true;
                     }
                     if (!added) {
@@ -209,12 +204,12 @@ public class AppsGridView extends GridView {
                             continue;
                         }
 
-                        ApplicationItem item = new ApplicationItem();
-                        item.name = info.loadLabel(mPackageManager).toString();
-                        item.packageName = info.packageName;
-                        item.drawable = info.loadIcon(mPackageManager);
-                        item.taskId = recentInfo.id;
-                        item.baseIntent = recentInfo.baseIntent;
+                        SearchItem item = new SearchItem();
+                        item.setName(info.loadLabel(mPackageManager).toString());
+                        item.setPackageName(info.packageName);
+                        item.setIcon(info.icon);
+                        item.setId(recentInfo.id);
+                        item.setBaseIntent(recentInfo.baseIntent);
                         recents.add(item);
                     }
                 } catch (NameNotFoundException e) {
@@ -226,9 +221,9 @@ public class AppsGridView extends GridView {
         return recents;
     }
 
-    private boolean isTaskInRecentList(ApplicationItem item) {
-        final int taskId = item.taskId;
-        final Intent intent = item.baseIntent;
+    private boolean isTaskInRecentList(SearchItem item) {
+        final int taskId = item.getId();
+        final Intent intent = item.getBaseIntent();
         if ((intent != null)
                 && ((intent.getFlags() & Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS) != 0)) {
             // / M: Don't care exclude-from-recent app.
@@ -254,9 +249,9 @@ public class AppsGridView extends GridView {
 
     public class AppsAdapter extends BaseAdapter {
 
-        private ArrayList<ApplicationItem> mAppItems;
+        private List<SearchItem> mAppItems;
 
-        public AppsAdapter(ArrayList<ApplicationItem> apps) {
+        public AppsAdapter(List<SearchItem> apps) {
             mAppItems = apps;
         }
 
@@ -278,7 +273,7 @@ public class AppsGridView extends GridView {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             ViewHolder viewHolder = null;
-            final ApplicationItem item = (ApplicationItem) getItem(position);
+            final SearchItem item = (SearchItem) getItem(position);
             if (convertView == null) {
                 convertView = mLayoutInflater.inflate(R.layout.package_item, null);
                 viewHolder = new ViewHolder();
@@ -295,12 +290,12 @@ public class AppsGridView extends GridView {
 
                 @Override
                 public void onClick(View arg0) {
-                    if (item.taskId >= 0 && isTaskInRecentList(item)) {
-                        mActivityManager.moveTaskToFront(item.taskId,
+                    if (item.getId() >= 0 && isTaskInRecentList(item)) {
+                        mActivityManager.moveTaskToFront(item.getId(),
                                 ActivityManager.MOVE_TASK_WITH_HOME);
-                        Log.v(TAG, "Move Task To Front for " + item.taskId);
-                    } else if (item.baseIntent != null) {
-                        Intent intent = item.baseIntent;
+                        Log.v(TAG, "Move Task To Front for " + item.getId());
+                    } else if (item.getBaseIntent() != null) {
+                        Intent intent = item.getBaseIntent();
                         intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY
                                 | Intent.FLAG_ACTIVITY_TASK_ON_HOME | Intent.FLAG_ACTIVITY_NEW_TASK);
                         Log.v(TAG, "Starting activity " + intent);
@@ -310,16 +305,16 @@ public class AppsGridView extends GridView {
                             Log.e(TAG, "Recents does not have the permission to launch " + intent,
                                     e);
                             mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
-                                    item.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                                    item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                         } catch (ActivityNotFoundException e) {
                             Log.e(TAG, "Error launching activity " + intent, e);
                             mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
-                                    item.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                                    item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                         }
 
                     } else {
                         mContext.startActivity(mPackageManager.getLaunchIntentForPackage(
-                                item.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                                item.getPackageName()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                     }
                     mCallback.hideView();
 
@@ -335,17 +330,58 @@ public class AppsGridView extends GridView {
                     Intent i = new Intent();
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     i.setAction("android.settings.APPLICATION_DETAILS_SETTINGS");
-                    i.setData(Uri.parse("package:" + item.packageName));
+                    i.setData(Uri.parse("package:" + item.getPackageName()));
                     mContext.startActivity(i);
                     mCallback.hideView();
                     return true;
                 }
 
             });
-            viewHolder.textTitle.setText(item.name);
-            viewHolder.icon.setImageDrawable(item.drawable);
+            viewHolder.textTitle.setText(item.getName());
+            setItemIcon(item, viewHolder.icon);
             return convertView;
         }
+    }
+
+    private void setItemIcon(SearchItem item, ImageView icon) {
+        Drawable drawable = drawableCache.get(item.getPackageName());
+        if (drawable != null) {
+            icon.setImageDrawable(drawable);
+        } else {
+            new IconLoadTask(item, icon).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+        }
+    }
+
+    private class IconLoadTask extends AsyncTask<Void, Void, Drawable> {
+
+        private ImageView icon;
+        private SearchItem item;
+
+        public IconLoadTask(SearchItem _item, ImageView _icon) {
+            icon = _icon;
+            item = _item;
+        }
+
+        @Override
+        protected Drawable doInBackground(Void... params) {
+            Context itemContext = null;
+            try {
+                itemContext = mContext.createPackageContext(item.getPackageName(),
+                        Context.CONTEXT_IGNORE_SECURITY);
+            } catch (NameNotFoundException e) {
+                e.printStackTrace();
+            }
+            Drawable d = itemContext.getResources().getDrawable(item.getIcon());
+            drawableCache.put(item.getPackageName(), d);
+            return d;
+        }
+
+        @Override
+        protected void onPostExecute(Drawable result) {
+            super.onPostExecute(result);
+            icon.setImageDrawable(result);
+        }
+
     }
 
     public interface HideViewCallback {
