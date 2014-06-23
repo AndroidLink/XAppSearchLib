@@ -161,15 +161,29 @@ public class AppsGridView extends GridView {
             mAppsAdapter.notifyDataSetChanged();
             return;
         }
-        List<SearchItem> result = sT9Search.search(string);
-        if (result != null) {
-            mAppsAdapter = new AppsAdapter(result);
-            setAdapter(mAppsAdapter);
-            mAppsAdapter.notifyDataSetChanged();
-        } else {
-            setAdapter(null);
-            mAppsAdapter.notifyDataSetChanged();
+        new SearchTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, string);
+    }
+
+    private class SearchTask extends AsyncTask<String, Void, List<SearchItem>> {
+
+        @Override
+        protected List<SearchItem> doInBackground(String... params) {
+            return sT9Search.search(params[0]);
         }
+
+        @Override
+        protected void onPostExecute(List<SearchItem> result) {
+            if (result != null) {
+                mAppsAdapter = new AppsAdapter(result);
+                setAdapter(mAppsAdapter);
+                mAppsAdapter.notifyDataSetChanged();
+            } else {
+                setAdapter(null);
+                mAppsAdapter.notifyDataSetChanged();
+            }
+            super.onPostExecute(result);
+        }
+
     }
 
     public ArrayList<SearchItem> getRecentApps() {
