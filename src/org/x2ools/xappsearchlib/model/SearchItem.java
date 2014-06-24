@@ -2,7 +2,9 @@
 package org.x2ools.xappsearchlib.model;
 
 import android.content.Intent;
-import android.net.Uri;
+import android.graphics.drawable.Drawable;
+
+import java.util.Comparator;
 
 public class SearchItem {
 
@@ -32,7 +34,7 @@ public class SearchItem {
     private Intent baseIntent;
 
     // contact item only
-    private String photo;
+    private Drawable photo;
     private String phoneNumber; // search string 3
 
     public int getType() {
@@ -100,13 +102,12 @@ public class SearchItem {
         baseIntent.toUri(0);
     }
 
-    public String getPhoto() {
+    public Drawable getPhoto() {
         return photo;
     }
 
-    public void setPhoto(String photo) {
+    public void setPhoto(Drawable photo) {
         this.photo = photo;
     }
-
-
+    
 }

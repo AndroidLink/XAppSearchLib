@@ -2,21 +2,23 @@
 package org.x2ools.xappsearchlib;
 
 import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.provider.ContactsContract;
+import android.text.TextUtils;
 
-import org.x2ools.xappsearchlib.database.DBHelper;
 import org.x2ools.xappsearchlib.model.SearchItem;
+import org.x2ools.xappsearchlib.tools.IconCache;
 import org.x2ools.xappsearchlib.tools.ToPinYinUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 
 public class T9Search {
@@ -33,64 +35,45 @@ public class T9Search {
 
     private ContentResolver mResolver;
 
-    private DBHelper mDbHelper;
-
     private Handler mHandler;
 
-    private List<SearchItem> results = new ArrayList<SearchItem>();
+    private List<SearchItem> mAllItems = new ArrayList<SearchItem>();
+    private HashMap<String, SearchItem> mAddedContact = new HashMap<String, SearchItem>();
 
-    public T9Search(Context context, Handler handler) {
+    private IconCache mIconCache;
+
+    private String mPrevInput;
+    private ArrayList<SearchItem> mSearchResult = new ArrayList<SearchItem>();
+    private ArrayList<SearchItem> mPrevResult = new ArrayList<SearchItem>();
+
+    public T9Search(Context context, IconCache iconCache, Handler handler) {
         mContext = context;
         mHandler = handler;
         mPackageManager = context.getPackageManager();
         mResolver = context.getContentResolver();
-        mDbHelper = new DBHelper(mContext);
+        mIconCache = iconCache;
         new GetAllAyncTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    private class GetAllAyncTask extends AsyncTask<Void, Void, Void> {
+    private class GetAllAyncTask extends AsyncTask<Void, Void, List<SearchItem>> {
 
         @Override
-        protected Void doInBackground(Void... params) {
-            List<ApplicationInfo> mApplications = new ArrayList<ApplicationInfo>();
+        protected List<SearchItem> doInBackground(Void... params) {
+            List<SearchItem> all = new ArrayList<SearchItem>();
 
+            List<ApplicationInfo> mApplications = new ArrayList<ApplicationInfo>();
             mApplications.addAll(mPackageManager.getInstalledApplications(0));
-            SQLiteDatabase db = mDbHelper.getWritableDatabase();
             for (ApplicationInfo appinfo : mApplications) {
                 if (mPackageManager.getLaunchIntentForPackage(appinfo.packageName) == null)
                     continue;
                 SearchItem appitem = new SearchItem();
+                appitem.setType(0);
                 appitem.setName(appinfo.loadLabel(mPackageManager).toString());
                 appitem.setPinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), false));
                 appitem.setFullpinyin(ToPinYinUtils.getPinyinNum(appitem.getName(), true));
                 appitem.setPackageName(appinfo.packageName);
-                appitem.setPhoto("android.resource://" + appinfo.packageName + "/drawable/" + appinfo.icon);
-
-                Cursor c = db.query(DBHelper.TABLE, new String[] {
-                        DBHelper.COLUME_PACKAGENAME
-                }, "packagename = ?",
-                        new String[] {
-                            appitem.getPackageName()
-                        }, null, null, null);
-
-                ContentValues values = new ContentValues();
-                values.put(DBHelper.COLUME_NAME, appitem.getName());
-                values.put(DBHelper.COLUME_PINYIN, appitem.getPinyin());
-                values.put(DBHelper.COLUME_FULLPINYIN, appitem.getFullpinyin());
-                values.put(DBHelper.COLUME_PHOTO, appitem.getPhoto());
-                values.put(DBHelper.COLUME_TYPE, 0);
-
-                if (c != null && c.moveToNext()) {
-                    db.update(DBHelper.TABLE, values, "packagename = ?",
-                            new String[] {
-                                appitem.getPackageName()
-                            });
-                } else {
-                    values.put(DBHelper.COLUME_PACKAGENAME, appitem.getPackageName());
-                    db.insert(DBHelper.TABLE, null, values);
-                }
-
-                c.close();
+                mIconCache.getIcon(appitem, appinfo);
+                all.add(appitem);
             }
 
             Cursor cursor = mResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -98,7 +81,7 @@ public class T9Search {
                     null, null, null);
             while (cursor.moveToNext()) {
                 int id = cursor.getInt(cursor
-                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone._ID));
+                        .getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID));
                 String name = cursor.getString(cursor
                         .getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                 String phoneNumber = cursor.getString(cursor
@@ -107,89 +90,95 @@ public class T9Search {
                         .getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_URI));
 
                 SearchItem item = new SearchItem();
+                item.setType(1);
                 item.setId(id);
                 item.setName(name);
                 item.setPinyin(ToPinYinUtils.getPinyinNum(item.getName(), false));
                 item.setFullpinyin(ToPinYinUtils.getPinyinNum(item.getName(), true));
                 item.setPhoneNumber(phoneNumber);
-                item.setPhoto(photoUri);
+                mIconCache.getIcon(item, mResolver, photoUri);
 
-                Cursor c = db.query(DBHelper.TABLE, new String[] {
-                        DBHelper.COLUME_PHONEID
-                }, "phoneid = ?",
-                        new String[] {
-                            item.getId() + ""
-                        }, null, null, null);
-
-                ContentValues values = new ContentValues();
-                values.put(DBHelper.COLUME_PHONEID, item.getId());
-                values.put(DBHelper.COLUME_NAME, item.getName());
-                values.put(DBHelper.COLUME_PINYIN, item.getPinyin());
-                values.put(DBHelper.COLUME_FULLPINYIN, item.getFullpinyin());
-                values.put(DBHelper.COLUME_PHONE, item.getPhoneNumber());
-                values.put(DBHelper.COLUME_PHOTO, item.getPhoto());
-                values.put(DBHelper.COLUME_TYPE, 1);
-
-                if (c != null && c.moveToNext()) {
-                    db.update(DBHelper.TABLE, values, "phoneid = ?",
-                            new String[] {
-                                item.getId() + ""
-                            });
-                } else {
-                    values.put(DBHelper.COLUME_PHONEID, item.getId());
-                    db.insert(DBHelper.TABLE, null, values);
+                if (mAddedContact.containsKey(name)) {
+                    SearchItem added = mAddedContact.get(name);
+                    if (added.getPhoneNumber().equals(phoneNumber)) {
+                        continue;
+                    } else {
+                        item.setName(name + "(" + phoneNumber + ")");
+                    }
                 }
-            }
 
+                all.add(item);
+                mAddedContact.put(name, item);
+            }
             cursor.close();
 
-            db.close();
-
-            return null;
+            return all;
         }
 
         @Override
-        protected void onPostExecute(Void result) {
-            super.onPostExecute(result);
+        protected void onPostExecute(List<SearchItem> result) {
+            mAllItems = result;
             mHandler.sendEmptyMessage(MSG_DATA_LOADED);
+            super.onPostExecute(result);
         }
+
     }
 
     public void reloadData() {
         new GetAllAyncTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public List<SearchItem> search(String number) {
-
-        String selection = DBHelper.COLUME_PINYIN + " like ? OR " + DBHelper.COLUME_FULLPINYIN
-                + " like ? OR " + DBHelper.COLUME_PHONE + " like ?";
-        String[] args = new String[] {
-                "%" + number + "%", "%" + number + "%", "%" + number + "%"
-        };
-        return query(selection, args);
-    }
-
     public List<SearchItem> getAll() {
-        return query(null, null);
+        Collections.sort(mAllItems, new NameComparator());
+        return mAllItems;
     }
 
-    private List<SearchItem> query(String selection, String[] selectionArgs) {
-        results.clear();
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-        Cursor c = db.query(DBHelper.TABLE, null, selection, selectionArgs, null, null, null);
-        if (c != null) {
-            while (c.moveToNext()) {
-                SearchItem item = new SearchItem();
-                item.setName(c.getString(c.getColumnIndex(DBHelper.COLUME_NAME)));
-                item.setPackageName(c.getString(c.getColumnIndex(DBHelper.COLUME_PACKAGENAME)));
-                item.setType(c.getInt(c.getColumnIndex(DBHelper.COLUME_TYPE)));
-                item.setPhoneNumber(c.getString(c.getColumnIndex(DBHelper.COLUME_PHONE)));
-                item.setPhoto(c.getString(c.getColumnIndex(DBHelper.COLUME_PHOTO)));
-                results.add(item);
+    public class NameComparator implements Comparator<SearchItem> {
+        @Override
+        public int compare(SearchItem lhs, SearchItem rhs) {
+            int type = lhs.getType() - rhs.getType();
+            int name = lhs.getName().compareTo(rhs.getName());
+            if (type != 0) {
+                return type;
+            } else {
+                return name;
             }
         }
 
-        return results;
+    }
+
+    public List<SearchItem> search(String number) {
+        mSearchResult.clear();
+        int pos = 0;
+        boolean newQuery = mPrevInput == null || number.length() <= mPrevInput.length();
+        for (SearchItem item : (newQuery ? mAllItems : mPrevResult)) {
+            pos = item.getPinyin().indexOf(number);
+            if (pos != -1) {
+                mSearchResult.add(item);
+                continue;
+            }
+
+            pos = item.getFullpinyin().indexOf(number);
+            if (pos != -1) {
+                mSearchResult.add(item);
+                continue;
+            }
+
+            if (!TextUtils.isEmpty(item.getPhoneNumber())) {
+                pos = item.getPhoneNumber().indexOf(number);
+                if (pos != -1) {
+                    mSearchResult.add(item);
+                    continue;
+                }
+            }
+        }
+        mPrevResult.clear();
+        mPrevInput = number;
+        if (mSearchResult.size() > 0) {
+            mPrevResult.addAll(mSearchResult);
+            return mSearchResult;
+        }
+        return null;
     }
 
 }

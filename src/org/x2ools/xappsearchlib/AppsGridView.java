@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
+import android.provider.ContactsContract;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -27,6 +28,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.x2ools.xappsearchlib.model.SearchItem;
+import org.x2ools.xappsearchlib.tools.IconCache;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +56,10 @@ public class AppsGridView extends GridView {
 
     private HideViewCallback mCallback;
 
+    private IconCache mIconCache;
+    
+    private boolean mAllMode = false;
+
     private Handler mHandler = new Handler() {
 
         @Override
@@ -62,6 +68,8 @@ public class AppsGridView extends GridView {
                 case T9Search.MSG_DATA_LOADED:
                     if (!TextUtils.isEmpty(mFilterStr)) {
                         filter(mFilterStr);
+                    } else if(mAllMode) {
+                        setAllApplicationsData();
                     }
                     break;
 
@@ -87,7 +95,8 @@ public class AppsGridView extends GridView {
         mPackageManager = context.getPackageManager();
         mActivityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         mLayoutInflater = LayoutInflater.from(context);
-        sT9Search = new T9Search(context, mHandler);
+        mIconCache = new IconCache(context);
+        sT9Search = new T9Search(context, mIconCache, mHandler);
         setApplicationsData();
         IntentFilter filter = new IntentFilter();
         filter.addAction("android.intent.action.PACKAGE_ADDED");
@@ -104,10 +113,7 @@ public class AppsGridView extends GridView {
     }
 
     public void setApplicationsData() {
-        apps = getRecentApps();
-        mAppsAdapter = new AppsAdapter(apps);
-        setAdapter(mAppsAdapter);
-        mAppsAdapter.notifyDataSetChanged();
+        new GetRecentTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     public void setAllApplicationsData() {
@@ -115,12 +121,11 @@ public class AppsGridView extends GridView {
         mAppsAdapter = new AppsAdapter(allApps);
         setAdapter(mAppsAdapter);
         mAppsAdapter.notifyDataSetChanged();
+        mAllMode = true;
     }
 
     public boolean isAllMode() {
-        if (getAdapter() == null)
-            return false;
-        return getAdapter().getCount() == sT9Search.getAll().size();
+        return mAllMode;
     }
 
     public boolean startAcivityByIndex(int index) {
@@ -149,10 +154,7 @@ public class AppsGridView extends GridView {
         if (sT9Search == null)
             return;
         if (TextUtils.isEmpty(string)) {
-            apps = getRecentApps();
-            mAppsAdapter = new AppsAdapter(apps);
-            setAdapter(mAppsAdapter);
-            mAppsAdapter.notifyDataSetChanged();
+            new GetRecentTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             return;
         }
         new SearchTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, string);
@@ -175,12 +177,31 @@ public class AppsGridView extends GridView {
                 setAdapter(null);
                 mAppsAdapter.notifyDataSetChanged();
             }
+            mAllMode = false;
             super.onPostExecute(result);
         }
 
     }
+    
+    private class GetRecentTask extends AsyncTask<Void, Void, List<SearchItem>> {
 
-    public ArrayList<SearchItem> getRecentApps() {
+        @Override
+        protected List<SearchItem> doInBackground(Void... params) {
+            return getRecentApps();
+        }
+
+        @Override
+        protected void onPostExecute(List<SearchItem> result) {
+            mAppsAdapter = new AppsAdapter(result);
+            setAdapter(mAppsAdapter);
+            mAppsAdapter.notifyDataSetChanged();
+            mAllMode = false;
+            super.onPostExecute(result);
+        }
+        
+    }
+
+    private ArrayList<SearchItem> getRecentApps() {
         List<RecentTaskInfo> recentTasks = mActivityManager.getRecentTasks(9,
                 ActivityManager.RECENT_IGNORE_UNAVAILABLE | ActivityManager.RECENT_WITH_EXCLUDED);
         ArrayList<SearchItem> recents = new ArrayList<SearchItem>();
@@ -215,10 +236,9 @@ public class AppsGridView extends GridView {
                         SearchItem item = new SearchItem();
                         item.setName(info.loadLabel(mPackageManager).toString());
                         item.setPackageName(info.packageName);
-                        item.setPhoto("android.resource://" + info.packageName + "/drawable/"
-                                + info.icon);
                         item.setId(recentInfo.id);
                         item.setBaseIntent(recentInfo.baseIntent);
+                        mIconCache.getIcon(item, info);
                         recents.add(item);
                     }
                 } catch (NameNotFoundException e) {
@@ -300,7 +320,8 @@ public class AppsGridView extends GridView {
                 @Override
                 public void onClick(View arg0) {
                     if (item.getType() == 1) {
-                        Intent intent=new Intent("android.intent.action.CALL",Uri.parse("tel:"+item.getPhoneNumber()));
+                        Intent intent = new Intent("android.intent.action.CALL", Uri.parse("tel:"
+                                + item.getPhoneNumber()));
                         mContext.startActivity(intent);
                     } else {
                         if (item.getId() >= 0 && isTaskInRecentList(item)) {
@@ -346,7 +367,10 @@ public class AppsGridView extends GridView {
                 public boolean onLongClick(View arg0) {
                     Log.d(TAG, "onLongClick ");
                     if (item.getType() == 1) {
-                        // TODO go to detail contact
+                        Intent intent = new Intent(Intent.ACTION_VIEW);
+                        Uri uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, item.getId()+"");
+                        intent.setData(uri);
+                        mContext.startActivity(intent);
                     } else {
                         Intent i = new Intent();
                         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -361,12 +385,7 @@ public class AppsGridView extends GridView {
 
             });
             viewHolder.textTitle.setText(item.getName());
-            String photoUri = item.getPhoto();
-            if (!TextUtils.isEmpty(photoUri)) {
-                viewHolder.icon.setImageURI(Uri.parse(item.getPhoto()));
-            } else {
-                viewHolder.icon.setImageResource(R.drawable.ic_contact_unknow);
-            }
+            viewHolder.icon.setImageDrawable(item.getPhoto());
             return convertView;
         }
     }

@@ -3,6 +3,8 @@ package org.x2ools.xappsearchlib;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -194,6 +196,16 @@ public class T9AppsView extends RelativeLayout {
         setOnClickListener(mOnClickListener);
         mAppsGridView = (AppsGridView) findViewById(R.id.appsList);
         mFilterView = (TextView) findViewById(R.id.numFilter);
+        
+        mFilterView.setOnClickListener(new OnClickListener() {
+            
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent("android.intent.action.CALL", Uri.parse("tel:"
+                        + mFilterView.getText().toString()));
+                mContext.startActivity(intent);
+            }
+        });
 
         HideViewCallback callback = new HideViewCallback() {
 
