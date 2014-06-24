@@ -57,7 +57,7 @@ public class AppsGridView extends GridView {
     private HideViewCallback mCallback;
 
     private IconCache mIconCache;
-    
+
     private boolean mAllMode = false;
 
     private Handler mHandler = new Handler() {
@@ -68,7 +68,7 @@ public class AppsGridView extends GridView {
                 case T9Search.MSG_DATA_LOADED:
                     if (!TextUtils.isEmpty(mFilterStr)) {
                         filter(mFilterStr);
-                    } else if(mAllMode) {
+                    } else if (mAllMode) {
                         setAllApplicationsData();
                     }
                     break;
@@ -134,11 +134,18 @@ public class AppsGridView extends GridView {
         }
         if (index < apps.size()) {
             SearchItem item = apps.get(index);
-            Intent i = mPackageManager.getLaunchIntentForPackage(item.getPackageName());
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            mContext.startActivity(i);
-            Log.d(TAG, "start " + item.getPackageName());
-            return true;
+            if (item.getType() == 0) {
+                Intent i = mPackageManager.getLaunchIntentForPackage(item.getPackageName());
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mContext.startActivity(i);
+                Log.d(TAG, "start " + item.getPackageName());
+                return true;
+            } else {
+                Intent intent = new Intent("android.intent.action.CALL", Uri.parse("tel:"
+                        + item.getPhoneNumber()));
+                mContext.startActivity(intent);
+                return true;
+            }
         }
         return false;
     }
@@ -182,7 +189,7 @@ public class AppsGridView extends GridView {
         }
 
     }
-    
+
     private class GetRecentTask extends AsyncTask<Void, Void, List<SearchItem>> {
 
         @Override
@@ -198,7 +205,7 @@ public class AppsGridView extends GridView {
             mAllMode = false;
             super.onPostExecute(result);
         }
-        
+
     }
 
     private ArrayList<SearchItem> getRecentApps() {
@@ -368,7 +375,8 @@ public class AppsGridView extends GridView {
                     Log.d(TAG, "onLongClick ");
                     if (item.getType() == 1) {
                         Intent intent = new Intent(Intent.ACTION_VIEW);
-                        Uri uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, item.getId()+"");
+                        Uri uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI,
+                                item.getId() + "");
                         intent.setData(uri);
                         mContext.startActivity(intent);
                     } else {
