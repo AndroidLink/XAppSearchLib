@@ -411,4 +411,8 @@ public class AppsGridView extends GridView {
 
         ImageView icon;
     }
+    
+    public void onDestroy() {
+        mContext.unregisterReceiver(mReceiver);
+    }
 }

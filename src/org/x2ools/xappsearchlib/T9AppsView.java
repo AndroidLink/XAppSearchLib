@@ -230,11 +230,19 @@ public class T9AppsView extends RelativeLayout {
     }
 
     public void hideView() {
-        ((Activity) mContext).finish();
+        if(mContext instanceof Activity) {
+            ((Activity) mContext).finish();
+        } else {
+            mContext.sendBroadcast(new Intent("ACTION_DETROY_VIEW"));
+        }
     }
 
     public void onMainViewShow() {
         mAppsGridView.setApplicationsData();
         switchModeAnimate(false, false);
+    }
+    
+    public void onDestroy() {
+        mAppsGridView.onDestroy();
     }
 }
